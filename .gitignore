@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# Env files
+.env
+*.env.local
+
+# Node
+node_modules/
+.next/
+.turbo/
+apps/web/.next/
+
+# Alembic
+alembic/versions/*.py
+
+# ML artifacts
+services/ai-engine/model_artifacts/*.pkl
+services/ai-engine/model_artifacts/*.joblib
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+*.log

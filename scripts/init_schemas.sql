@@ -1,0 +1,11 @@
+-- Schemas (one per service) — PostGIS loaded on cms db automatically
+CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE SCHEMA IF NOT EXISTS compliance;
+CREATE SCHEMA IF NOT EXISTS inspection;
+CREATE SCHEMA IF NOT EXISTS violation;
+CREATE SCHEMA IF NOT EXISTS notification;
+CREATE SCHEMA IF NOT EXISTS ai_engine;

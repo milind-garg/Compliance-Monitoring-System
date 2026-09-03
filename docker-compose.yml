@@ -1,0 +1,213 @@
+version: "3.9"
+
+services:
+  # ── Databases ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cms}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cms_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-cms}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_schemas.sql:/docker-entrypoint-initdb.d/init_schemas.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cms}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Message broker ─────────────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-cms}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-cms_secret}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Object storage ─────────────────────────────────────────────────────────
+  minio:
+    image: minio/minio:RELEASE.2024-05-10T01-41-38Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Search ─────────────────────────────────────────────────────────────────
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
+  # ── Services ───────────────────────────────────────────────────────────────
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cms}:${POSTGRES_PASSWORD:-cms_secret}@postgres:5432/${POSTGRES_DB:-cms}
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-cms}:${RABBITMQ_PASSWORD:-cms_secret}@rabbitmq:5672/
+    ports:
+      - "8001:8000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    volumes:
+      - ./packages/shared-utils:/app/shared_utils
+
+  compliance-service:
+    build:
+      context: ./services/compliance-service
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cms}:${POSTGRES_PASSWORD:-cms_secret}@postgres:5432/${POSTGRES_DB:-cms}
+      REDIS_URL: redis://redis:6379/1
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-cms}:${RABBITMQ_PASSWORD:-cms_secret}@rabbitmq:5672/
+    ports:
+      - "8002:8000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    volumes:
+      - ./packages/shared-utils:/app/shared_utils
+
+  inspection-service:
+    build:
+      context: ./services/inspection-service
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cms}:${POSTGRES_PASSWORD:-cms_secret}@postgres:5432/${POSTGRES_DB:-cms}
+      REDIS_URL: redis://redis:6379/2
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-cms}:${RABBITMQ_PASSWORD:-cms_secret}@rabbitmq:5672/
+      MINIO_ENDPOINT: minio:9000
+    ports:
+      - "8003:8000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    volumes:
+      - ./packages/shared-utils:/app/shared_utils
+
+  violation-service:
+    build:
+      context: ./services/violation-service
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cms}:${POSTGRES_PASSWORD:-cms_secret}@postgres:5432/${POSTGRES_DB:-cms}
+      REDIS_URL: redis://redis:6379/3
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-cms}:${RABBITMQ_PASSWORD:-cms_secret}@rabbitmq:5672/
+    ports:
+      - "8004:8000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    volumes:
+      - ./packages/shared-utils:/app/shared_utils
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cms}:${POSTGRES_PASSWORD:-cms_secret}@postgres:5432/${POSTGRES_DB:-cms}
+      REDIS_URL: redis://redis:6379/4
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-cms}:${RABBITMQ_PASSWORD:-cms_secret}@rabbitmq:5672/
+    ports:
+      - "8005:8000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    volumes:
+      - ./packages/shared-utils:/app/shared_utils
+
+  ai-engine:
+    build:
+      context: ./services/ai-engine
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cms}:${POSTGRES_PASSWORD:-cms_secret}@postgres:5432/${POSTGRES_DB:-cms}
+      REDIS_URL: redis://redis:6379/5
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-cms}:${RABBITMQ_PASSWORD:-cms_secret}@rabbitmq:5672/
+    ports:
+      - "8010:8000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    volumes:
+      - ./packages/shared-utils:/app/shared_utils
+      - ./services/ai-engine/model_artifacts:/app/model_artifacts
+
+  # ── Gateway ────────────────────────────────────────────────────────────────
+  gateway:
+    image: nginx:1.25-alpine
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8000:80"
+    depends_on:
+      - auth-service
+      - compliance-service
+      - inspection-service
+      - violation-service
+      - notification-service
+      - ai-engine
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  minio_data:
+  es_data:
