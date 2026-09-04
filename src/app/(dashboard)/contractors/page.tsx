@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Plus, Star } from "lucide-react";
-import api from "@/lib/api";
+import { api } from "@/lib/api";
 
 type Contractor = {
   id: string;
