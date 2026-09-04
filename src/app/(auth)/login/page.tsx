@@ -8,7 +8,6 @@ import { HardHat, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/store/auth";
-import { api } from "@/lib/api";
 
 const schema = z.object({
   email: z.string().email("Invalid email"),
@@ -30,8 +29,17 @@ export default function LoginPage() {
   const onSubmit = async (data: FormData) => {
     setError("");
     try {
-      const res = await api.post("/auth/login", data);
-      setAuth(res.data.user, res.data.access_token);
+      const { data: tokens } = await import("@/lib/services").then(({ authApi }) =>
+        authApi.post("/v1/auth/login", data)
+      );
+      // Store token first so /v1/users/me can attach it
+      localStorage.setItem("access_token", tokens.access_token);
+      const { authApi } = await import("@/lib/services");
+      const { data: me } = await authApi.get("/v1/users/me");
+      setAuth(
+        { id: me.id, name: me.full_name, email: me.email, role: me.role.toUpperCase() as never },
+        tokens.access_token
+      );
       router.push("/dashboard");
     } catch {
       setError("Invalid credentials. Please try again.");
@@ -46,7 +54,7 @@ export default function LoginPage() {
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--primary)]">
             <HardHat className="h-7 w-7 text-white" />
           </div>
-          <h1 className="text-xl font-bold text-[var(--foreground)]">Coal Mine Compliance</h1>
+          <h1 className="text-xl font-bold text-[var(--foreground)]">Khanan Bodh</h1>
           <p className="text-sm text-[var(--muted-foreground)]">Sign in to your account</p>
         </div>
 

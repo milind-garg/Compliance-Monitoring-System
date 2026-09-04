@@ -1,31 +1,42 @@
 "use client";
+import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { authApi } from "@/lib/services";
 
-const users = [
-  { id: "1", name: "Arjun Sharma", email: "arjun@dgms.gov.in", role: "INSPECTOR", mines: 3, status: "ACTIVE" },
-  { id: "2", name: "Meena Patel", email: "meena@dgms.gov.in", role: "MANAGER", mines: 8, status: "ACTIVE" },
-  { id: "3", name: "Sunita Roy", email: "sunita@dgms.gov.in", role: "INSPECTOR", mines: 2, status: "ACTIVE" },
-  { id: "4", name: "Rajesh Kumar", email: "rajesh@coalindia.in", role: "VIEWER", mines: 5, status: "INACTIVE" },
-];
+interface UserOut {
+  id: string;
+  email: string;
+  full_name: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+  organisation_id: string;
+}
 
 const roleVariant: Record<string, "default" | "outline"> = {
-  ADMIN: "default",
-  MANAGER: "default",
-  INSPECTOR: "outline",
-  VIEWER: "outline",
+  admin:    "default",
+  manager:  "default",
+  inspector: "outline",
+  viewer:   "outline",
 };
 
+function fmt(iso: string) {
+  return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
 export default function UsersPage() {
+  const { data: users = [], isLoading } = useQuery<UserOut[]>({
+    queryKey: ["users"],
+    queryFn: () => authApi.get("/v1/users/").then((r) => r.data),
+  });
+
   return (
     <div>
       <PageHeader
         title="User Management"
         description="Manage inspector and manager accounts"
-        actions={<Button size="sm"><Plus className="h-4 w-4" />Add User</Button>}
       />
       <Card>
         <CardContent className="p-0">
@@ -33,31 +44,36 @@ export default function UsersPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[var(--border)] bg-[var(--muted)]">
-                  {["Name", "Email", "Role", "Assigned Mines", "Status", "Actions"].map((h) => (
+                  {["Name", "Email", "Role", "Status", "Joined"].map((h) => (
                     <th key={h} className="px-4 py-3 text-left font-medium text-[var(--muted-foreground)]">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {users.map((u) => (
+                {isLoading ? (
+                  <tr><td colSpan={5} className="px-4 py-8 text-center text-[var(--muted-foreground)]">Loading…</td></tr>
+                ) : users.length === 0 ? (
+                  <tr><td colSpan={5} className="px-4 py-8 text-center text-[var(--muted-foreground)]">No users found.</td></tr>
+                ) : users.map((u) => (
                   <tr key={u.id} className="border-b border-[var(--border)] hover:bg-[var(--muted)]">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <div className="h-8 w-8 rounded-full bg-[var(--primary)] flex items-center justify-center text-white text-xs font-bold">
-                          {u.name[0]}
+                          {(u.full_name || u.email)[0].toUpperCase()}
                         </div>
-                        <span className="font-medium">{u.name}</span>
+                        <span className="font-medium">{u.full_name || u.email}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-[var(--muted-foreground)]">{u.email}</td>
-                    <td className="px-4 py-3"><Badge variant={roleVariant[u.role]}>{u.role}</Badge></td>
-                    <td className="px-4 py-3 text-center">{u.mines}</td>
                     <td className="px-4 py-3">
-                      <Badge variant={u.status === "ACTIVE" ? "success" : "outline"}>{u.status}</Badge>
+                      <Badge variant={roleVariant[u.role] ?? "outline"}>{u.role}</Badge>
                     </td>
                     <td className="px-4 py-3">
-                      <Button variant="ghost" size="sm">Edit</Button>
+                      <Badge variant={u.is_active ? "success" : "outline"}>
+                        {u.is_active ? "Active" : "Inactive"}
+                      </Badge>
                     </td>
+                    <td className="px-4 py-3 text-[var(--muted-foreground)]">{fmt(u.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
