@@ -6,7 +6,7 @@ import { Providers } from "./providers";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "Coal Mine Compliance Monitor",
+  title: "Khanan Bodh",
   description: "AI-based smart governance and compliance monitoring system for coal mines",
 };
 

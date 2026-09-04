@@ -28,26 +28,28 @@ export interface ComplianceRecord {
 export interface Violation {
   id: string;
   mine_id: string;
-  mine_name: string;
-  title: string;
+  inspection_id: string | null;
+  category: string;
+  severity: string;
   description: string;
-  status: ViolationStatus;
-  severity: RiskLevel;
+  regulation_ref: string | null;
+  status: string;
+  due_date: string | null;
+  resolved_at: string | null;
   created_at: string;
-  due_date: string;
-  assigned_to?: string;
 }
 
 export interface Inspection {
   id: string;
   mine_id: string;
-  mine_name: string;
   inspector_id: string;
-  inspector_name: string;
-  status: InspectionStatus;
-  scheduled_date: string;
-  completed_date?: string;
-  score?: number;
+  inspection_type: string;
+  scheduled_at: string;
+  completed_at: string | null;
+  status: string;
+  findings: string | null;
+  recommendations: string | null;
+  created_at: string;
 }
 
 export interface PaginatedResponse<T> {

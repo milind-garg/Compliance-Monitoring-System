@@ -39,8 +39,8 @@ export function Sidebar() {
       <div className="flex items-center gap-2 px-4 py-5 border-b border-white/10">
         <HardHat className="h-6 w-6 text-[var(--accent)]" />
         <span className="text-sm font-bold leading-tight">
-          Coal Mine<br />
-          <span className="text-[var(--accent)] font-semibold">Compliance</span>
+          Khanan<br />
+          <span className="text-[var(--accent)] font-semibold">Bodh</span>
         </span>
       </div>
 

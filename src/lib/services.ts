@@ -13,8 +13,15 @@ function makeClient(baseURL: string): AxiosInstance {
     (res) => res,
     (err) => {
       if (err.response?.status === 401 && typeof window !== "undefined") {
-        localStorage.removeItem("access_token");
-        window.location.href = "/login";
+        const url: string = err.config?.url ?? "";
+        // Only log out when the auth service itself rejects the token.
+        // Downstream services (violations, compliance, etc.) may return 401
+        // for permission/data reasons — that should not end the session.
+        if (url.includes("/v1/auth/") || url.includes("/v1/users/me")) {
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("auth-store");
+          window.location.href = "/login";
+        }
       }
       return Promise.reject(err);
     }
