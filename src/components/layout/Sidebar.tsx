@@ -13,6 +13,9 @@ import {
   Users,
   LogOut,
   HardHat,
+  Briefcase,
+  TrendingUp,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth";
@@ -26,7 +29,10 @@ const navItems = [
   { href: "/ai-insights", label: "AI Insights", icon: Brain },
   { href: "/reports", label: "Reports", icon: BarChart2 },
   { href: "/notifications", label: "Notifications", icon: Bell },
+  { href: "/contractors", label: "Contractors", icon: Briefcase },
+  { href: "/production", label: "Production", icon: TrendingUp },
   { href: "/users", label: "User Mgmt", icon: Users },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Sidebar() {
