@@ -29,4 +29,5 @@ export const inspectionApi    = makeClient(process.env.NEXT_PUBLIC_INSPECTION_UR
 export const violationApi     = makeClient(process.env.NEXT_PUBLIC_VIOLATION_URL     ?? "http://localhost:8004");
 export const notificationApi  = makeClient(process.env.NEXT_PUBLIC_NOTIFICATION_URL  ?? "http://localhost:8005");
 export const reportApi        = makeClient(process.env.NEXT_PUBLIC_REPORT_URL        ?? "http://localhost:8006");
+export const gisApi           = makeClient(process.env.NEXT_PUBLIC_GIS_URL           ?? "http://localhost:8009");
 export const aiApi            = makeClient(process.env.NEXT_PUBLIC_AI_URL            ?? "http://localhost:8010");
