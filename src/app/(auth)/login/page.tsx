@@ -10,9 +10,12 @@ import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/store/auth";
 import Link from "next/link";
 
+const MAX_ATTEMPTS = 5;
+
 const schema = z.object({
   email: z.string().email("Invalid email"),
   password: z.string().min(6, "Password must be at least 6 characters"),
+  rememberMe: z.boolean().optional(),
 });
 type FormData = z.infer<typeof schema>;
 
@@ -21,6 +24,8 @@ export default function LoginPage() {
   const setAuth = useAuthStore((s) => s.setAuth);
   const [error, setError] = useState("");
   const [showPw, setShowPw] = useState(false);
+  const [attempts, setAttempts] = useState(0);
+  const locked = attempts >= MAX_ATTEMPTS;
 
   const {
     register,
@@ -29,13 +34,17 @@ export default function LoginPage() {
   } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   const onSubmit = async (data: FormData) => {
+    if (locked) return;
     setError("");
     try {
-      const { data: tokens } = await import("@/lib/services").then(({ authApi }) =>
-        authApi.post("/v1/auth/login", data)
-      );
-      localStorage.setItem("access_token", tokens.access_token);
       const { authApi } = await import("@/lib/services");
+      const { data: tokens } = await authApi.post("/v1/auth/login", {
+        email: data.email,
+        password: data.password,
+      });
+      const storage = data.rememberMe ? localStorage : sessionStorage;
+      storage.setItem("access_token", tokens.access_token);
+      localStorage.setItem("access_token", tokens.access_token); // always set for interceptor
       const { data: me } = await authApi.get("/v1/users/me");
       setAuth(
         { id: me.id, name: me.full_name, email: me.email, role: me.role.toUpperCase() as never },
@@ -43,7 +52,13 @@ export default function LoginPage() {
       );
       router.push("/dashboard");
     } catch {
-      setError("Invalid credentials. Please try again.");
+      const next = attempts + 1;
+      setAttempts(next);
+      if (next >= MAX_ATTEMPTS) {
+        setError("Account temporarily locked after 5 failed attempts. Please try again later or reset your password.");
+      } else {
+        setError(`Invalid credentials. ${MAX_ATTEMPTS - next} attempt${MAX_ATTEMPTS - next === 1 ? "" : "s"} remaining.`);
+      }
     }
   };
 
@@ -76,15 +91,23 @@ export default function LoginPage() {
             {errors.password && <p className="mt-1 text-xs text-[var(--danger)]">{errors.password.message}</p>}
           </div>
 
-          <div className="text-right">
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 text-sm text-[var(--muted-foreground)] cursor-pointer select-none">
+              <input type="checkbox" {...register("rememberMe")} className="h-3.5 w-3.5 rounded border-gray-300 accent-[var(--primary)]" />
+              Remember me
+            </label>
             <Link href="/forgot-password" className="text-xs text-[var(--primary)] hover:underline">Forgot password?</Link>
           </div>
 
-          {error && <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-[var(--danger)]">{error}</div>}
+          {error && (
+            <div className={`rounded-md px-3 py-2 text-sm ${locked ? "bg-orange-50 text-orange-700" : "bg-red-50 text-[var(--danger)]"}`}>
+              {error}
+            </div>
+          )}
 
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
+          <Button type="submit" className="w-full" disabled={isSubmitting || locked}>
             {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-            {isSubmitting ? "Signing in…" : "Sign in"}
+            {locked ? "Account locked" : isSubmitting ? "Signing in…" : "Sign in"}
           </Button>
         </form>
 
