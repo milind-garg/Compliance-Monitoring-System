@@ -1,98 +1,31 @@
 "use client";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, PieChart, Pie, Cell, Legend,
 } from "recharts";
 import { ShieldCheck, AlertTriangle, ClipboardList, Activity, TrendingUp, HardHat } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
-import { api } from "@/lib/api";
-import type { DashboardStats } from "@/types";
-
-// Mock data until backend is ready
-const mockStats: DashboardStats = {
-  total_mines: 24,
-  compliant_mines: 18,
-  active_violations: 47,
-  pending_inspections: 12,
-  avg_compliance_score: 73.4,
-  critical_alerts: 3,
-};
-
-const complianceTrend = [
-  { month: "Mar", score: 65 },
-  { month: "Apr", score: 68 },
-  { month: "May", score: 71 },
-  { month: "Jun", score: 69 },
-  { month: "Jul", score: 74 },
-  { month: "Aug", score: 73 },
-];
-
-const violationsByCategory = [
-  { name: "Safety Equipment", count: 14 },
-  { name: "Ventilation", count: 9 },
-  { name: "Electrical", count: 8 },
-  { name: "Fire Safety", count: 7 },
-  { name: "Record Keeping", count: 9 },
-];
-
-const riskDistribution = [
-  { name: "Low", value: 8, color: "#27ae60" },
-  { name: "Medium", value: 9, color: "#f39c12" },
-  { name: "High", value: 5, color: "#e67e22" },
-  { name: "Critical", value: 2, color: "#e74c3c" },
-];
-
-const recentAlerts = [
-  { id: "1", mine: "Jharia Block-A", issue: "Ventilation failure detected", severity: "CRITICAL", time: "10 min ago" },
-  { id: "2", mine: "Raniganj North", issue: "Missing safety equipment records", severity: "HIGH", time: "1 hr ago" },
-  { id: "3", mine: "Singrauli Zone-3", issue: "Inspection overdue by 14 days", severity: "MEDIUM", time: "3 hrs ago" },
-];
+import { authApi, complianceApi, inspectionApi, violationApi } from "@/lib/services";
 
 const severityVariant: Record<string, "danger" | "warning" | "outline"> = {
-  CRITICAL: "danger",
-  HIGH: "warning",
-  MEDIUM: "outline",
+  critical: "danger", high: "warning", medium: "outline", low: "outline",
 };
 
-function StatCard({
-  title,
-  value,
-  sub,
-  icon: Icon,
-  accent,
-}: {
-  title: string;
-  value: string | number;
-  sub?: string;
-  icon: React.ElementType;
-  accent?: string;
+function StatCard({ title, value, sub, icon: Icon, accent }: {
+  title: string; value: string | number; sub?: string; icon: React.ElementType; accent?: string;
 }) {
   return (
     <Card>
       <CardContent className="flex items-center gap-4 p-5">
-        <div
-          className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg"
-          style={{ background: accent ?? "var(--primary)", opacity: 0.9 }}
-        >
+        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg" style={{ background: accent ?? "var(--primary)" }}>
           <Icon className="h-5 w-5 text-white" />
         </div>
         <div>
           <p className="text-sm text-[var(--muted-foreground)]">{title}</p>
-          <p className="text-2xl font-bold text-[var(--foreground)]">{value}</p>
+          <p className="text-2xl font-bold">{value}</p>
           {sub && <p className="text-xs text-[var(--muted-foreground)]">{sub}</p>}
         </div>
       </CardContent>
@@ -101,102 +34,106 @@ function StatCard({
 }
 
 export default function DashboardPage() {
-  const { data: stats = mockStats } = useQuery<DashboardStats>({
-    queryKey: ["dashboard-stats"],
-    queryFn: async () => (await api.get("/dashboard/stats")).data,
-    // Silently fall back to mock data if backend unavailable
-    retry: false,
-    throwOnError: false,
+  const results = useQueries({
+    queries: [
+      { queryKey: ["mines"],       queryFn: () => authApi.get("/v1/mines/").then(r => r.data),       retry: false },
+      { queryKey: ["compliance"],  queryFn: () => complianceApi.get("/v1/compliance/").then(r => r.data.items), retry: false },
+      { queryKey: ["inspections"], queryFn: () => inspectionApi.get("/v1/inspections/").then(r => r.data.items), retry: false },
+      { queryKey: ["violations"],  queryFn: () => violationApi.get("/v1/violations/").then(r => r.data.items),  retry: false },
+    ],
   });
+
+  const mines       = (results[0].data as any[]) ?? [];
+  const compliance  = (results[1].data as any[]) ?? [];
+  const inspections = (results[2].data as any[]) ?? [];
+  const violations  = (results[3].data as any[]) ?? [];
+
+  // Derived stats
+  const compliantMines    = compliance.filter(r => r.status === "compliant").length;
+  const activeViolations  = violations.filter(v => v.status === "open").length;
+  const pendingInspections = inspections.filter(i => i.status === "scheduled").length;
+  const avgScore = compliance.length
+    ? Math.round(compliance.reduce((s, r) => s + parseFloat(r.overall_score), 0) / compliance.length * 10) / 10
+    : 0;
+  const criticalAlerts = violations.filter(v => v.severity === "critical" && v.status === "open").length;
+
+  // Compliance trend — group records by month
+  const trendMap: Record<string, number[]> = {};
+  compliance.forEach(r => {
+    const month = new Date(r.period_start).toLocaleString("default", { month: "short" });
+    trendMap[month] = trendMap[month] ?? [];
+    trendMap[month].push(parseFloat(r.overall_score));
+  });
+  const complianceTrend = Object.entries(trendMap).map(([month, scores]) => ({
+    month,
+    score: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+  })).slice(-6);
+
+  // Violations by category
+  const catMap: Record<string, number> = {};
+  violations.forEach(v => { catMap[v.category] = (catMap[v.category] ?? 0) + 1; });
+  const violationsByCategory = Object.entries(catMap).map(([name, count]) => ({ name, count }));
+
+  // Risk distribution from violations severity
+  const riskColors = { low: "#27ae60", medium: "#f39c12", high: "#e67e22", critical: "#e74c3c" };
+  const sevMap: Record<string, number> = {};
+  violations.forEach(v => { sevMap[v.severity] = (sevMap[v.severity] ?? 0) + 1; });
+  const riskDistribution = Object.entries(sevMap).map(([name, value]) => ({
+    name: name.charAt(0).toUpperCase() + name.slice(1),
+    value,
+    color: riskColors[name as keyof typeof riskColors] ?? "#999",
+  }));
+
+  // Recent open violations as alerts
+  const recentAlerts = violations
+    .filter(v => v.status === "open")
+    .slice(0, 5)
+    .map(v => ({
+      id: v.id,
+      mine: v.mine_id.slice(0, 8),
+      issue: v.description.slice(0, 70),
+      severity: v.severity.toUpperCase(),
+      time: new Date(v.created_at).toLocaleDateString(),
+    }));
+
+  const isLoading = results.some(r => r.isLoading);
 
   return (
     <div>
-      <PageHeader
-        title="Dashboard"
-        description="Overview of coal mine compliance status across all sites"
-      />
+      <PageHeader title="Dashboard" description="Overview of Khanan Bodh status across all sites" />
 
-      {/* Stat Cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6 mb-6">
-        <StatCard title="Total Mines" value={stats.total_mines} icon={HardHat} accent="#1e3a5f" />
-        <StatCard
-          title="Compliant Mines"
-          value={stats.compliant_mines}
-          sub={`of ${stats.total_mines}`}
-          icon={ShieldCheck}
-          accent="#27ae60"
-        />
-        <StatCard
-          title="Active Violations"
-          value={stats.active_violations}
-          icon={AlertTriangle}
-          accent="#e67e22"
-        />
-        <StatCard
-          title="Pending Inspections"
-          value={stats.pending_inspections}
-          icon={ClipboardList}
-          accent="#f39c12"
-        />
-        <StatCard
-          title="Avg Compliance"
-          value={`${stats.avg_compliance_score}%`}
-          icon={TrendingUp}
-          accent="#2980b9"
-        />
-        <StatCard
-          title="Critical Alerts"
-          value={stats.critical_alerts}
-          icon={Activity}
-          accent="#e74c3c"
-        />
+        <StatCard title="Total Mines"        value={isLoading ? "…" : mines.length}          icon={HardHat}        accent="#1e3a5f" />
+        <StatCard title="Compliant Mines"    value={isLoading ? "…" : compliantMines}         sub={`of ${compliance.length} records`} icon={ShieldCheck} accent="#27ae60" />
+        <StatCard title="Active Violations"  value={isLoading ? "…" : activeViolations}       icon={AlertTriangle}  accent="#e67e22" />
+        <StatCard title="Pending Inspections" value={isLoading ? "…" : pendingInspections}    icon={ClipboardList}  accent="#f39c12" />
+        <StatCard title="Avg Compliance"     value={isLoading ? "…" : `${avgScore}%`}         icon={TrendingUp}     accent="#2980b9" />
+        <StatCard title="Critical Alerts"    value={isLoading ? "…" : criticalAlerts}         icon={Activity}       accent="#e74c3c" />
       </div>
 
-      {/* Charts row */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 mb-6">
-        {/* Compliance Trend */}
         <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Compliance Score Trend</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>Compliance Score Trend</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={complianceTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                <YAxis domain={[50, 100]} tick={{ fontSize: 12 }} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} />
                 <Tooltip />
-                <Line
-                  type="monotone"
-                  dataKey="score"
-                  stroke="#1e3a5f"
-                  strokeWidth={2}
-                  dot={{ r: 4 }}
-                />
+                <Line type="monotone" dataKey="score" stroke="#1e3a5f" strokeWidth={2} dot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        {/* Risk Distribution */}
         <Card>
-          <CardHeader>
-            <CardTitle>Risk Distribution</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>Risk Distribution</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
-                <Pie
-                  data={riskDistribution}
-                  cx="50%"
-                  cy="45%"
-                  innerRadius={55}
-                  outerRadius={80}
-                  dataKey="value"
-                >
-                  {riskDistribution.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
-                  ))}
+                <Pie data={riskDistribution} cx="50%" cy="45%" innerRadius={55} outerRadius={80} dataKey="value">
+                  {riskDistribution.map((e, i) => <Cell key={i} fill={e.color} />)}
                 </Pie>
                 <Legend iconSize={10} />
                 <Tooltip />
@@ -206,13 +143,9 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Bottom row */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Violations by Category */}
         <Card>
-          <CardHeader>
-            <CardTitle>Violations by Category</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>Violations by Category</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={violationsByCategory} layout="vertical">
@@ -226,29 +159,27 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Recent Alerts */}
         <Card>
-          <CardHeader>
-            <CardTitle>Recent Alerts</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>Recent Open Violations</CardTitle></CardHeader>
           <CardContent className="pt-2">
-            <div className="space-y-3">
-              {recentAlerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  className="flex items-start justify-between gap-3 rounded-md border border-[var(--border)] p-3"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{alert.mine}</p>
-                    <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{alert.issue}</p>
+            {recentAlerts.length === 0 ? (
+              <p className="py-8 text-center text-sm text-[var(--muted-foreground)]">No open violations</p>
+            ) : (
+              <div className="space-y-3">
+                {recentAlerts.map(alert => (
+                  <div key={alert.id} className="flex items-start justify-between gap-3 rounded-md border border-[var(--border)] p-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">Mine {alert.mine}…</p>
+                      <p className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate">{alert.issue}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      <Badge variant={severityVariant[alert.severity.toLowerCase()]}>{alert.severity}</Badge>
+                      <span className="text-xs text-[var(--muted-foreground)]">{alert.time}</span>
+                    </div>
                   </div>
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    <Badge variant={severityVariant[alert.severity]}>{alert.severity}</Badge>
-                    <span className="text-xs text-[var(--muted-foreground)]">{alert.time}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
