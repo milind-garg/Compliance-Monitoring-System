@@ -157,7 +157,7 @@ function useGPS() {
     );
   };
 
-  return { coords, gpsError, loading, capture };
+  return { coords, setCoords, gpsError, loading, capture };
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -177,7 +177,7 @@ export default function ConductInspectionPage() {
     DEFAULT_ITEMS.map(d => ({ description: d, status: "na", notes: "", photos: [] }))
   );
 
-  const { coords, gpsError, loading: gpsLoading, capture: captureGPS } = useGPS();
+  const { coords, setCoords, gpsError, loading: gpsLoading, capture: captureGPS } = useGPS();
 
   const { data: mines = [], isLoading: minesLoading } = useQuery({
     queryKey: ["mines"],
@@ -207,7 +207,9 @@ export default function ConductInspectionPage() {
       if (d.inspectionType) setInspectionType(d.inspectionType);
       if (d.scheduledAt) setScheduledAt(d.scheduledAt);
       if (d.checklist) setChecklist(d.checklist);
+      if (d.coords) setCoords(d.coords);
     } catch { /* corrupt draft — ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-save every 30 s
@@ -298,6 +300,8 @@ export default function ConductInspectionPage() {
                   <option value="safety">Safety</option>
                   <option value="environmental">Environmental</option>
                   <option value="compliance">Compliance</option>
+                  <option value="surprise">Surprise</option>
+                  <option value="followup">Follow-up</option>
                 </select>
               </div>
 

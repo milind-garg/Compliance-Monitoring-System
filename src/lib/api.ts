@@ -14,10 +14,13 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (res) => res,
-  async (err) => {
-    if (err.response?.status === 401) {
-      localStorage.removeItem("access_token");
-      window.location.href = "/login";
+  (err) => {
+    if (err.response?.status === 401 && typeof window !== "undefined") {
+      const url: string = err.config?.url ?? "";
+      if (url.includes("/v1/users/me")) {
+        localStorage.removeItem("access_token");
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(err);
   }

@@ -7,22 +7,27 @@ export interface Mine {
   id: string;
   name: string;
   location: string;
-  latitude: number;
-  longitude: number;
-  type: string;
-  risk_level: RiskLevel;
-  compliance_score: number;
+  latitude: number | null;
+  longitude: number | null;
+  mine_type: string;
+  is_active: boolean;
 }
 
 export interface ComplianceRecord {
   id: string;
   mine_id: string;
-  mine_name: string;
-  status: ComplianceStatus;
-  score: number;
-  last_inspection: string;
-  violations_count: number;
-  risk_level: RiskLevel;
+  period_start: string;
+  period_end: string;
+  overall_score: number;
+  safety_score: number;
+  environmental_score: number;
+  labour_score: number;
+  status: string;
+  notes: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  evidence_files: string[] | null;
+  created_at: string;
 }
 
 export interface Violation {
@@ -56,7 +61,8 @@ export interface PaginatedResponse<T> {
   items: T[];
   total: number;
   page: number;
-  page_size: number;
+  size: number;
+  pages: number;
 }
 
 export interface DashboardStats {

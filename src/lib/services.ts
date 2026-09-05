@@ -14,10 +14,10 @@ function makeClient(baseURL: string): AxiosInstance {
     (err) => {
       if (err.response?.status === 401 && typeof window !== "undefined") {
         const url: string = err.config?.url ?? "";
-        // Only log out when the auth service itself rejects the token.
-        // Downstream services (violations, compliance, etc.) may return 401
-        // for permission/data reasons — that should not end the session.
-        if (url.includes("/v1/auth/") || url.includes("/v1/users/me")) {
+        // Only log out when /users/me rejects the token — that's the definitive
+        // "token is invalid" signal. Login failures (POST /auth/login) also return
+        // 401 but must not trigger a redirect loop.
+        if (url.includes("/v1/users/me")) {
           localStorage.removeItem("access_token");
           localStorage.removeItem("auth-store");
           window.location.href = "/login";
@@ -38,3 +38,5 @@ export const notificationApi  = makeClient(process.env.NEXT_PUBLIC_NOTIFICATION_
 export const reportApi        = makeClient(process.env.NEXT_PUBLIC_REPORT_URL        ?? "http://localhost:8006");
 export const gisApi           = makeClient(process.env.NEXT_PUBLIC_GIS_URL           ?? "http://localhost:8009");
 export const aiApi            = makeClient(process.env.NEXT_PUBLIC_AI_URL            ?? "http://localhost:8010");
+export const contractorApi    = makeClient(process.env.NEXT_PUBLIC_CONTRACTOR_URL    ?? "http://localhost:8011");
+export const productionApi    = makeClient(process.env.NEXT_PUBLIC_PRODUCTION_URL    ?? "http://localhost:8012");

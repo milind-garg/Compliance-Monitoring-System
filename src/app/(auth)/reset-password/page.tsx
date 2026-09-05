@@ -1,7 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { HardHat, Loader2, Eye, EyeOff } from "lucide-react";
+import Image from "next/image";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
@@ -21,7 +22,7 @@ function PwField({ label, value, onChange }: { label: string; value: string; onC
   );
 }
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const router = useRouter();
   const params = useSearchParams();
   const token = params.get("token") ?? "";
@@ -50,30 +51,46 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="w-full max-w-sm">
+    <div className="w-full max-w-md">
       <div className="rounded-xl bg-white p-8 shadow-2xl">
-        <div className="mb-8 flex flex-col items-center gap-2">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--primary)]">
-            <HardHat className="h-7 w-7 text-white" />
+        <div className="mb-6 flex flex-col items-center text-center">
+          <div className="relative mb-3 h-28 w-28 overflow-hidden rounded-full border-2 border-[#b77a45] bg-white shadow-lg hover:scale-105 transition-transform">
+            <Image
+              src="/logo.png"
+              alt="Khanan Bodh"
+              fill
+              sizes="112px"
+              className="object-contain p-1.5"
+              priority
+            />
           </div>
-          <h1 className="text-xl font-bold text-[var(--foreground)]">Reset Password</h1>
-          <p className="text-sm text-[var(--muted-foreground)]">Enter your new password</p>
+          <h1 className="text-2xl font-bold tracking-tight text-[#172126]">Reset Password</h1>
+          <p className="mt-1 text-xs text-[#b77a45] font-semibold tracking-wider uppercase">Khanan Bodh · Coal India Limited Company</p>
+          <p className="mt-1 text-xs text-[var(--muted-foreground)]">Enter your new secure password below</p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">
           <PwField label="New Password" value={password} onChange={setPassword} />
           <PwField label="Confirm Password" value={confirm} onChange={setConfirm} />
           {error && <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-[var(--danger)]">{error}</div>}
-          <Button type="submit" className="w-full" disabled={loading || !token}>
+          <Button type="submit" variant="secondary" className="w-full" disabled={loading || !token}>
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {loading ? "Resetting…" : "Reset Password"}
           </Button>
         </form>
 
         <p className="mt-6 text-center text-sm text-[var(--muted-foreground)]">
-          <Link href="/login" className="text-[var(--primary)] hover:underline">Back to sign in</Link>
+          <Link href="/login" className="text-[#2f6664] font-medium hover:underline">Back to sign in</Link>
         </p>
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-white" /></div>}>
+      <ResetPasswordForm />
+    </Suspense>
   );
 }

@@ -18,8 +18,9 @@ import {
   Activity,
   Zap,
 } from "lucide-react";
-import { gisApi } from "@/lib/services";
-import type { MinePinProps, HeatPoint } from "@/components/shared/MineMap";
+import { gisApi, violationApi, inspectionApi } from "@/lib/services";
+import type { MinePinProps, HeatPoint, ViolationMarker, InspectionMarker } from "@/components/shared/MineMap";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const MineMap = dynamic(() => import("@/components/shared/MineMap"), {
   ssr: false,
@@ -105,6 +106,8 @@ export default function MapsPage() {
   const [radiusKm, setRadiusKm] = useState("100");
   const [nearbyResults, setNearbyResults] = useState<NearbyMine[]>([]);
   const [showHeatmap, setShowHeatmap] = useState(true);
+  const [showViolations, setShowViolations] = useState(true);
+  const [showInspections, setShowInspections] = useState(false);
   const [selectedMine, setSelectedMine] = useState<string | null>(null);
   const [activeLayer, setActiveLayer] = useState<"compliance" | "risk" | "violations">("risk");
 
@@ -118,6 +121,18 @@ export default function MapsPage() {
   const { data: heatmapData = [] } = useQuery<HeatPoint[]>({
     queryKey: ["gis-heatmap"],
     queryFn: () => gisApi.get("/v1/gis/heatmap").then((r) => r.data),
+    retry: false,
+  });
+
+  const { data: rawViolations = [] } = useQuery({
+    queryKey: ["violations-map"],
+    queryFn: () => violationApi.get("/v1/violations/?size=500").then(r => r.data.items ?? r.data),
+    retry: false,
+  });
+
+  const { data: rawInspections = [] } = useQuery({
+    queryKey: ["inspections-map"],
+    queryFn: () => inspectionApi.get("/v1/inspections/?size=500").then(r => r.data.items ?? r.data),
     retry: false,
   });
 
@@ -153,9 +168,36 @@ export default function MapsPage() {
   const mapHeatmap = apiMines.length > 0 ? heatmapData : DEMO_HEATMAP;
   const isDemo = apiMines.length === 0 && !loadingFeatures;
 
+  // Build mine-id → coords map for markers that carry only mine_id
+  const mineCoords: Record<string, { lat: number; lng: number; name: string }> = {};
+  mapMines.forEach(m => { mineCoords[m.id] = { lat: m.lat, lng: m.lng, name: m.name }; });
+
+  const violationMarkers: ViolationMarker[] = (rawViolations as any[])
+    .filter((v: any) => v.location?.lat && v.location?.lng)
+    .map((v: any) => ({
+      id: v.id,
+      lat: v.location.lat,
+      lng: v.location.lng,
+      severity: v.severity ?? "medium",
+      category: v.category ?? "general",
+      mine_name: mineCoords[v.mine_id]?.name,
+    }));
+
+  const inspectionMarkers: InspectionMarker[] = (rawInspections as any[])
+    .filter((i: any) => i.location?.lat && i.location?.lng)
+    .map((i: any) => ({
+      id: i.id,
+      lat: i.location.lat,
+      lng: i.location.lng,
+      status: i.status ?? "completed",
+      mine_name: mineCoords[i.mine_id]?.name,
+      conducted_at: i.conducted_at,
+    }));
+
   // Sidebar stats
   const criticalCount = mapMines.filter((m) => m.risk === "CRITICAL").length;
-  const highCount     = mapMines.filter((m) => m.risk === "HIGH").length;
+  const activeCount = mapMines.length;
+  const highRiskCount = mapMines.filter((m) => m.risk === "CRITICAL" || m.risk === "HIGH").length;
   const totalViolations = mapMines.reduce((s, m) => s + (m.open_violations ?? 0), 0);
   const avgScore = Math.round(mapMines.reduce((s, m) => s + m.score, 0) / (mapMines.length || 1));
 
@@ -170,41 +212,47 @@ export default function MapsPage() {
         actions={
           <div className="flex items-center gap-2">
             {isDemo && (
-              <span className="text-xs bg-amber-500/10 text-amber-600 border border-amber-500/20 rounded-full px-2.5 py-0.5 font-medium">
+              <span className="text-xs bg-[#b77a45]/15 text-[#874f20] border border-[#b77a45]/30 rounded-full px-2.5 py-0.5 font-medium">
                 Demo data
               </span>
             )}
             <Button
-              size="sm"
               variant="outline"
+              size="sm"
               onClick={() => sync.mutate()}
               disabled={sync.isPending}
             >
-              {sync.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-1.5" />
-              )}
+              <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${sync.isPending ? "animate-spin" : ""}`} />
               Sync Mines
             </Button>
           </div>
         }
       />
 
-      {/* Top stat strip */}
-      <div className="grid grid-cols-4 gap-3">
-        {[
-          { label: "Total Mines",      value: mapMines.length,  sub: "across all regions",       color: "text-[var(--foreground)]"  },
-          { label: "Critical Risk",    value: criticalCount,    sub: "require immediate action",  color: "text-red-500"              },
-          { label: "High Risk",        value: highCount,        sub: "close monitoring needed",   color: "text-orange-500"           },
-          { label: "Open Violations",  value: totalViolations,  sub: "pending resolution",        color: "text-amber-500"            },
-        ].map((s) => (
-          <Card key={s.label} className="p-3">
-            <p className="text-xs text-[var(--muted-foreground)]">{s.label}</p>
-            <p className={`text-2xl font-bold mt-0.5 ${s.color}`}>{s.value}</p>
-            <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{s.sub}</p>
-          </Card>
-        ))}
+      {/* ── Top stats row ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-4">
+        {loadingFeatures ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i} className="p-3 space-y-2">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-7 w-16" />
+              <Skeleton className="h-2.5 w-20" />
+            </Card>
+          ))
+        ) : (
+          [
+            { label: "Total Mines Mapped", value: mapMines.length,  sub: `${activeCount} operational`, color: "text-[#172126]" },
+            { label: "High / Critical Risk", value: highRiskCount, sub: "require DGMS attention",      color: "text-[#c0392b]" },
+            { label: "Avg Compliance",   value: `${avgScore}%`,   sub: "fleet wide",                color: "text-[#2f6664]" },
+            { label: "Open Violations",  value: totalViolations,  sub: "pending resolution",        color: "text-[#b77a45]" },
+          ].map((s) => (
+            <Card key={s.label} className="p-3">
+              <p className="text-xs text-[var(--muted-foreground)]">{s.label}</p>
+              <p className={`text-2xl font-bold mt-0.5 ${s.color}`}>{s.value}</p>
+              <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{s.sub}</p>
+            </Card>
+          ))
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
@@ -225,8 +273,8 @@ export default function MapsPage() {
                       onClick={() => setActiveLayer(layer)}
                       className={`text-xs px-2 py-0.5 rounded-md capitalize transition-colors ${
                         activeLayer === layer
-                          ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
-                          : "text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
+                          ? "bg-[#2f6664] text-white font-medium"
+                          : "text-[var(--muted-foreground)] hover:bg-[var(--stone)]/50"
                       }`}
                     >
                       {layer}
@@ -234,18 +282,22 @@ export default function MapsPage() {
                   ))}
                 </div>
               </div>
-              <label className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] cursor-pointer select-none">
-                <div
-                  className={`relative h-4 w-7 rounded-full transition-colors ${showHeatmap ? "bg-red-500" : "bg-[var(--muted)]"}`}
-                  onClick={() => setShowHeatmap(!showHeatmap)}
-                >
-                  <div
-                    className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${showHeatmap ? "translate-x-3.5" : "translate-x-0.5"}`}
-                  />
-                </div>
-                <Layers className="h-3.5 w-3.5" />
-                Violation heatmap
-              </label>
+              <div className="flex items-center gap-3 flex-wrap">
+                {[
+                  { key: "heatmap",     label: "Heatmap",     color: "bg-[#c0392b]",    on: showHeatmap,     set: setShowHeatmap },
+                  { key: "violations",  label: "Violations",  color: "bg-[#b77a45]", on: showViolations,  set: setShowViolations },
+                  { key: "inspections", label: "Inspections", color: "bg-[#2f6664]",   on: showInspections, set: setShowInspections },
+                ].map(t => (
+                  <label key={t.key} className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] cursor-pointer select-none">
+                    <div className={`relative h-4 w-7 rounded-full transition-colors ${t.on ? t.color : "bg-[var(--muted)]"}`}
+                      onClick={() => t.set(!t.on)}>
+                      <div className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${t.on ? "translate-x-3.5" : "translate-x-0.5"}`} />
+                    </div>
+                    <Layers className="h-3.5 w-3.5" />
+                    {t.label}
+                  </label>
+                ))}
+              </div>
             </div>
 
             <CardContent className="p-0 h-[480px]">
@@ -257,6 +309,8 @@ export default function MapsPage() {
                 <MineMap
                   mines={mapMines}
                   heatmap={showHeatmap ? mapHeatmap : []}
+                  violations={showViolations ? violationMarkers : []}
+                  inspections={showInspections ? inspectionMarkers : []}
                   center={[23.5, 85.5]}
                   zoom={6}
                 />
@@ -355,6 +409,11 @@ export default function MapsPage() {
                   ))}
                 </div>
               )}
+              {searchNearby.isError && (
+                <p className="mt-2 text-sm text-[var(--danger)]">
+                  Search failed — GIS service unavailable.
+                </p>
+              )}
               {searchNearby.isSuccess && nearbyResults.length === 0 && (
                 <p className="mt-2 text-sm text-[var(--muted-foreground)]">
                   No mines found within {radiusKm} km of the given coordinates.
@@ -383,6 +442,28 @@ export default function MapsPage() {
             </div>
           </Card>
 
+          {/* Selected mine detail */}
+          {selectedMineData && (
+            <Card className="p-4 border-[var(--primary)]/40">
+              <p className="text-xs text-[var(--muted-foreground)] mb-1">Selected</p>
+              <p className="text-sm font-semibold leading-snug">{selectedMineData.name}</p>
+              <div className="mt-2 flex items-center gap-2">
+                <div className="h-1.5 flex-1 rounded-full bg-[var(--muted)]">
+                  <div className="h-full rounded-full" style={{ width: `${selectedMineData.score}%`, background: riskColor[selectedMineData.risk] ?? "#6b7280" }} />
+                </div>
+                <span className="text-xs font-bold" style={{ color: riskColor[selectedMineData.risk] ?? "#6b7280" }}>
+                  {selectedMineData.score}%
+                </span>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-xs">
+                <Badge variant={riskVariant[selectedMineData.risk]}>{selectedMineData.risk}</Badge>
+                <span className={selectedMineData.open_violations ? "text-red-500 font-medium" : "text-green-500"}>
+                  {selectedMineData.open_violations ? `${selectedMineData.open_violations} open violations` : "✓ No violations"}
+                </span>
+              </div>
+            </Card>
+          )}
+
           {/* Mine list */}
           <div>
             <h3 className="text-sm font-semibold mb-2 flex items-center justify-between">
@@ -392,58 +473,74 @@ export default function MapsPage() {
               </span>
             </h3>
             <div className="space-y-2 max-h-[520px] overflow-y-auto pr-0.5">
-              {sortedMines.map((m) => (
-                <div
-                  key={m.id}
-                  onClick={() => setSelectedMine(selectedMine === m.id ? null : m.id)}
-                  className={`rounded-lg border p-3 cursor-pointer transition-all ${
-                    selectedMine === m.id
-                      ? "border-[var(--primary)] bg-[var(--primary)]/5"
-                      : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--primary)]/40"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-1">
-                    <p className="text-sm font-medium leading-tight flex-1">{m.name}</p>
-                    <span
-                      className="text-xs font-bold shrink-0"
-                      style={{ color: riskColor[m.risk] ?? "#6b7280" }}
-                    >
-                      {m.score}%
-                    </span>
-                  </div>
-
-                  {/* Score bar */}
-                  <div className="mt-1.5 h-1 w-full rounded-full bg-[var(--muted)]">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{
-                        width: `${m.score}%`,
-                        background: riskColor[m.risk] ?? "#6b7280",
-                      }}
-                    />
-                  </div>
-
-                  <div className="mt-2 flex items-center justify-between">
-                    <div
-                      className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md font-semibold"
-                      style={{
-                        background: `${riskColor[m.risk] ?? "#6b7280"}18`,
-                        color: riskColor[m.risk] ?? "#6b7280",
-                      }}
-                    >
-                      {riskIcon[m.risk]}
-                      {m.risk}
+              {loadingFeatures ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-4 w-10" />
                     </div>
-                    {(m.open_violations ?? 0) > 0 ? (
-                      <span className="text-xs text-red-500 font-medium">
-                        {m.open_violations} violation{m.open_violations !== 1 ? "s" : ""}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-green-500">✓ Clean</span>
-                    )}
+                    <Skeleton className="h-1.5 w-full rounded-full" />
+                    <div className="flex justify-between items-center pt-1">
+                      <Skeleton className="h-4 w-16 rounded-md" />
+                      <Skeleton className="h-3 w-14" />
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                sortedMines.map((m) => (
+                  <div
+                    key={m.id}
+                    onClick={() => setSelectedMine(selectedMine === m.id ? null : m.id)}
+                    className={`rounded-lg border p-3 cursor-pointer transition-all ${
+                      selectedMine === m.id
+                        ? "border-[var(--primary)] bg-[var(--primary)]/5"
+                        : "border-[var(--border)] bg-[var(--card)] hover:border-[var(--primary)]/40"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-1">
+                      <p className="text-sm font-medium leading-tight flex-1">{m.name}</p>
+                      <span
+                        className="text-xs font-bold shrink-0"
+                        style={{ color: riskColor[m.risk] ?? "#6b7280" }}
+                      >
+                        {m.score}%
+                      </span>
+                    </div>
+
+                    {/* Score bar */}
+                    <div className="mt-1.5 h-1 w-full rounded-full bg-[var(--muted)]">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${m.score}%`,
+                          background: riskColor[m.risk] ?? "#6b7280",
+                        }}
+                      />
+                    </div>
+
+                    <div className="mt-2 flex items-center justify-between">
+                      <div
+                        className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md font-semibold"
+                        style={{
+                          background: `${riskColor[m.risk] ?? "#6b7280"}18`,
+                          color: riskColor[m.risk] ?? "#6b7280",
+                        }}
+                      >
+                        {riskIcon[m.risk]}
+                        {m.risk}
+                      </div>
+                      {(m.open_violations ?? 0) > 0 ? (
+                        <span className="text-xs text-red-500 font-medium">
+                          {m.open_violations} violation{m.open_violations !== 1 ? "s" : ""}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-green-500">✓ Clean</span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

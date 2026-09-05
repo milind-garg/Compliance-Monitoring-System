@@ -5,7 +5,7 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: "ADMIN" | "INSPECTOR" | "MANAGER" | "VIEWER";
+  role: "admin" | "inspector" | "manager" | "viewer";
   mine_id?: string;
 }
 

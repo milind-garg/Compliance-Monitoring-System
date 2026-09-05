@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Plus, TrendingUp, Package, Users, Clock } from "lucide-react";
-import { api } from "@/lib/api";
+import { Skeleton } from "@/components/ui/skeleton";
+import { productionApi } from "@/lib/services";
 
 type ProductionReport = {
   id: string;
@@ -29,10 +30,31 @@ type Stats = {
   total_reports: number;
 };
 
+// ── Demo data (shown when API returns no records) ─────────────────────────────
+const DEMO_REPORTS: ProductionReport[] = [
+  { id: "p1",  mine_id: "m1", date: "2026-09-05", shift: "day",     tonnes_produced: 4820,  ore_grade: 68.4, equipment_hours: 18.5, worker_count: 142, notes: "Routine operation, conveyor belt maintenance scheduled for tonight.", submitted_by: "Rajesh Kumar",   created_at: "2026-09-05T08:00:00Z" },
+  { id: "p2",  mine_id: "m1", date: "2026-09-05", shift: "night",   tonnes_produced: 3910,  ore_grade: 65.2, equipment_hours: 16.0, worker_count: 118, notes: "Slight delay due to blasting clearance at Sector 7-B.",             submitted_by: "Anita Sharma",    created_at: "2026-09-05T20:00:00Z" },
+  { id: "p3",  mine_id: "m2", date: "2026-09-05", shift: "day",     tonnes_produced: 6130,  ore_grade: 71.8, equipment_hours: 22.0, worker_count: 205, notes: "Exceeded daily target by 8%. New shovel deployment successful.",    submitted_by: "Mohan Prasad",    created_at: "2026-09-05T09:15:00Z" },
+  { id: "p4",  mine_id: "m3", date: "2026-09-04", shift: "general", tonnes_produced: 2250,  ore_grade: 62.1, equipment_hours: 14.0, worker_count: 97,  notes: "Pump failure in Level 3 reduced output by ~15%.",                   submitted_by: "Sunita Devi",     created_at: "2026-09-04T17:30:00Z" },
+  { id: "p5",  mine_id: "m4", date: "2026-09-04", shift: "day",     tonnes_produced: 5480,  ore_grade: 69.9, equipment_hours: 20.5, worker_count: 178, notes: "Normal operations. DGMS checklist completed.",                       submitted_by: "Vikram Singh",    created_at: "2026-09-04T08:30:00Z" },
+  { id: "p6",  mine_id: "m5", date: "2026-09-04", shift: "night",   tonnes_produced: 4190,  ore_grade: 66.7, equipment_hours: 17.5, worker_count: 131, notes: "Dust suppression system activated at 23:00 due to wind advisory.", submitted_by: "Priya Nair",      created_at: "2026-09-04T22:00:00Z" },
+  { id: "p7",  mine_id: "m1", date: "2026-09-03", shift: "day",     tonnes_produced: 4650,  ore_grade: 67.5, equipment_hours: 19.0, worker_count: 140, notes: "Dragline ER-4 returned from maintenance.",                           submitted_by: "Rajesh Kumar",   created_at: "2026-09-03T08:00:00Z" },
+  { id: "p8",  mine_id: "m2", date: "2026-09-03", shift: "day",     tonnes_produced: 5900,  ore_grade: 72.3, equipment_hours: 21.0, worker_count: 200, notes: "Record daily output this quarter.",                                  submitted_by: "Mohan Prasad",    created_at: "2026-09-03T08:45:00Z" },
+  { id: "p9",  mine_id: "m6", date: "2026-09-03", shift: "general", tonnes_produced: 3120,  ore_grade: 60.8, equipment_hours: 15.0, worker_count: 112, notes: "Grade slightly lower due to mixed seam zone.",                       submitted_by: "Deepak Yadav",    created_at: "2026-09-03T17:00:00Z" },
+  { id: "p10", mine_id: "m4", date: "2026-09-02", shift: "day",     tonnes_produced: 5250,  ore_grade: 70.2, equipment_hours: 20.0, worker_count: 175, notes: "Haul road grading completed. Equipment efficiency improved.",        submitted_by: "Vikram Singh",    created_at: "2026-09-02T09:00:00Z" },
+];
+
+const DEMO_STATS: Stats = {
+  total_tonnes: DEMO_REPORTS.reduce((s, r) => s + r.tonnes_produced, 0),
+  avg_grade: parseFloat((DEMO_REPORTS.reduce((s, r) => s + r.ore_grade, 0) / DEMO_REPORTS.length).toFixed(2)),
+  total_reports: DEMO_REPORTS.length,
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 const shiftVariant: Record<string, string> = {
-  day: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-  night: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  general: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300",
+  day:     "bg-[#b77a45]/15 text-[#874f20] border border-[#b77a45]/30",
+  night:   "bg-[#2f6664]/15 text-[#1e4846] border border-[#2f6664]/30",
+  general: "bg-[var(--stone)] text-[var(--foreground)] border border-[var(--border)]",
 };
 
 function fmt(iso: string) {
@@ -44,15 +66,20 @@ export default function ProductionPage() {
 
   const { data: reports = [], isLoading } = useQuery<ProductionReport[]>({
     queryKey: ["production"],
-    queryFn: () => api.get("/api/v1/production/").then((r) => r.data.items ?? r.data),
+    queryFn: () => productionApi.get("/v1/production/").then((r) => r.data.items ?? r.data),
   });
 
   const { data: stats } = useQuery<Stats>({
     queryKey: ["production-stats"],
-    queryFn: () => api.get("/api/v1/production/stats/summary").then((r) => r.data),
+    queryFn: () => productionApi.get("/v1/production/stats/summary").then((r) => r.data),
   });
 
-  const filtered = reports.filter(
+  // Fall back to demo data when the API returns nothing
+  const displayReports = reports.length > 0 ? reports : DEMO_REPORTS;
+  const displayStats = stats ?? (reports.length === 0 && !isLoading ? DEMO_STATS : undefined);
+  const isDemo = reports.length === 0 && !isLoading;
+
+  const filtered = displayReports.filter(
     (r) =>
       r.date.includes(search) ||
       r.shift.includes(search.toLowerCase()) ||
@@ -65,9 +92,16 @@ export default function ProductionPage() {
         title="Production Reports"
         description="Daily production tracking and shift data"
         actions={
-          <Button size="sm">
-            <Plus className="w-4 h-4 mr-1" /> New Report
-          </Button>
+          <div className="flex items-center gap-2">
+            {isDemo && (
+              <span className="text-xs bg-[#b77a45]/15 text-[#874f20] border border-[#b77a45]/30 rounded-full px-2.5 py-0.5 font-medium">
+                Demo data
+              </span>
+            )}
+            <Button size="sm" variant="secondary">
+              <Plus className="w-4 h-4 mr-1" /> New Report
+            </Button>
+          </div>
         }
       />
 
@@ -80,7 +114,11 @@ export default function ProductionPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{stats?.total_tonnes?.toLocaleString("en-IN") ?? "—"}</p>
+            {isLoading ? (
+              <Skeleton className="h-8 w-28" />
+            ) : (
+              <p className="text-2xl font-bold">{displayStats?.total_tonnes?.toLocaleString("en-IN") ?? "—"}</p>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -90,7 +128,11 @@ export default function ProductionPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{stats?.avg_grade?.toFixed(2) ?? "—"}%</p>
+            {isLoading ? (
+              <Skeleton className="h-8 w-20" />
+            ) : (
+              <p className="text-2xl font-bold">{displayStats?.avg_grade?.toFixed(2) ?? "—"}%</p>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -100,7 +142,11 @@ export default function ProductionPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{stats?.total_reports ?? "—"}</p>
+            {isLoading ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <p className="text-2xl font-bold">{displayStats?.total_reports ?? "—"}</p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -118,7 +164,28 @@ export default function ProductionPage() {
       {isLoading ? (
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-16 rounded-lg bg-muted animate-pulse" />
+            <Card key={i}>
+              <CardContent className="p-4 flex items-center justify-between gap-4">
+                <div className="space-y-1.5 flex-1">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-4 w-16 rounded-full" />
+                </div>
+                <div className="flex items-center gap-6">
+                  <div className="space-y-1 text-right">
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-3 w-12 ml-auto" />
+                  </div>
+                  <div className="space-y-1 text-right">
+                    <Skeleton className="h-4 w-12" />
+                    <Skeleton className="h-3 w-10 ml-auto" />
+                  </div>
+                  <div className="space-y-1 text-right">
+                    <Skeleton className="h-4 w-10" />
+                    <Skeleton className="h-3 w-12 ml-auto" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       ) : filtered.length === 0 ? (
@@ -126,7 +193,7 @@ export default function ProductionPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((r) => (
-            <Card key={r.id} className="hover:border-primary/50 transition-colors cursor-pointer">
+            <Card key={r.id} className="hover:border-[#2f6664]/60 transition-colors cursor-pointer">
               <CardContent className="p-4 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-4 min-w-0">
                   <div>

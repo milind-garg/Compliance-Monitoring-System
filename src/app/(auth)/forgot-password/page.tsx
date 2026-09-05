@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
-import { HardHat, Loader2, ArrowLeft } from "lucide-react";
+import Image from "next/image";
+import { Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
@@ -28,14 +29,22 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="w-full max-w-sm">
+    <div className="w-full max-w-md">
       <div className="rounded-xl bg-white p-8 shadow-2xl">
-        <div className="mb-8 flex flex-col items-center gap-2">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--primary)]">
-            <HardHat className="h-7 w-7 text-white" />
+        <div className="mb-6 flex flex-col items-center gap-2 text-center">
+          <div className="relative mb-2 h-28 w-28 overflow-hidden rounded-full border-2 border-[#b77a45] bg-white shadow-lg hover:scale-105 transition-transform">
+            <Image
+              src="/logo.png"
+              alt="Khanan Bodh Logo"
+              fill
+              sizes="112px"
+              className="object-contain p-1.5"
+              priority
+            />
           </div>
-          <h1 className="text-xl font-bold text-[var(--foreground)]">Forgot Password</h1>
-          <p className="text-center text-sm text-[var(--muted-foreground)]">
+          <h1 className="text-2xl font-bold tracking-tight text-[#172126]">Forgot Password</h1>
+          <p className="text-xs text-[#b77a45] font-semibold tracking-wider uppercase -mt-1">Khanan Bodh · Coal India Limited Company</p>
+          <p className="text-sm text-[var(--muted-foreground)]">
             Enter your email and we&apos;ll send a reset link
           </p>
         </div>
@@ -57,7 +66,7 @@ export default function ForgotPasswordPage() {
               />
             </div>
             {error && <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-[var(--danger)]">{error}</div>}
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" variant="secondary" className="w-full" disabled={loading}>
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               {loading ? "Sending…" : "Send Reset Link"}
             </Button>
@@ -65,7 +74,7 @@ export default function ForgotPasswordPage() {
         )}
 
         <div className="mt-6 flex justify-center">
-          <Link href="/login" className="flex items-center gap-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+          <Link href="/login" className="flex items-center gap-1.5 text-sm text-[#2f6664] font-medium hover:underline">
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to sign in
           </Link>
