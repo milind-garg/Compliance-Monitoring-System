@@ -40,3 +40,4 @@ export const gisApi           = makeClient(process.env.NEXT_PUBLIC_GIS_URL      
 export const aiApi            = makeClient(process.env.NEXT_PUBLIC_AI_URL            ?? "http://localhost:8010");
 export const contractorApi    = makeClient(process.env.NEXT_PUBLIC_CONTRACTOR_URL    ?? "http://localhost:8011");
 export const productionApi    = makeClient(process.env.NEXT_PUBLIC_PRODUCTION_URL    ?? "http://localhost:8012");
+export const ocrApi           = makeClient(process.env.NEXT_PUBLIC_OCR_URL           ?? "http://localhost:8013");
