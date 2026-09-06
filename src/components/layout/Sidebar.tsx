@@ -12,6 +12,8 @@ import {
   Brain,
   BarChart2,
   ScanText,
+  ShieldAlert,
+  MapPin,
   Bell,
   Users,
   LogOut,
@@ -27,6 +29,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth";
 import { useSidebarStore } from "@/store/sidebar";
+import { canAccess } from "@/lib/rbac";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -38,6 +41,8 @@ const navItems = [
   { href: "/ai-insights", label: "AI Insights", icon: Brain },
   { href: "/reports", label: "Reports", icon: BarChart2 },
   { href: "/ocr", label: "OCR Parser", icon: ScanText },
+  { href: "/ppe-check", label: "PPE Check", icon: ShieldAlert },
+  { href: "/worker-tracking", label: "Worker Tracking", icon: MapPin },
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/contractors", label: "Contractors", icon: Briefcase },
   { href: "/production", label: "Production", icon: TrendingUp },
@@ -48,7 +53,9 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const logout = useAuthStore((s) => s.logout);
+  const role = useAuthStore((s) => s.user?.role);
   const { isCollapsed, toggleSidebar } = useSidebarStore();
+  const visibleItems = navItems.filter((item) => canAccess(role, item.href));
 
   // Keyboard shortcut: Ctrl+B or Cmd+B to toggle sidebar
   useEffect(() => {
@@ -104,7 +111,7 @@ export function Sidebar() {
 
       {/* Navigation items */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 space-y-1 scrollbar-thin">
-        {navItems.map(({ href, label, icon: Icon }) => {
+        {visibleItems.map(({ href, label, icon: Icon }) => {
           const active = pathname.startsWith(href);
           return (
             <Link
