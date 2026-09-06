@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { inspectionApi, authApi } from "@/lib/services";
 import { Skeleton } from "@/components/ui/skeleton";
+import { buildMineMap, getMineName } from "@/lib/mines";
 
 const statusVariant: Record<string, "outline" | "warning" | "success" | "danger"> = {
   scheduled: "outline", in_progress: "warning", completed: "success", cancelled: "outline",
@@ -121,8 +122,7 @@ export default function InspectionDetailPage() {
   });
 
   const inspection = rawInspection ?? (id ? DEMO_INSPECTIONS_MAP[id] : null);
-  const apiMineMap = Object.fromEntries(rawMines.map((m) => [m.id, m.name]));
-  const mineMap = Object.keys(apiMineMap).length > 0 ? apiMineMap : DEMO_MINE_MAP;
+  const mineMap = buildMineMap(rawMines);
   const apiUserMap = Object.fromEntries(rawUsers.map((u) => [u.id, u.full_name]));
   const userMap = Object.keys(apiUserMap).length > 0 ? apiUserMap : DEMO_USER_MAP;
 
@@ -165,7 +165,7 @@ export default function InspectionDetailPage() {
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div>
                   <h2 className="text-lg font-semibold capitalize">{inspection.inspection_type.replace("_", " ")} Inspection</h2>
-                  <p className="text-sm text-[var(--muted-foreground)]">{mineMap[inspection.mine_id] ?? inspection.mine_id}</p>
+                  <p className="text-sm text-[var(--muted-foreground)]">{getMineName(inspection.mine_id, mineMap)}</p>
                 </div>
                 <Badge variant={statusVariant[inspection.status] ?? "outline"}>
                   {inspection.status.replace("_", " ")}

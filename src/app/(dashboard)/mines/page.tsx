@@ -11,6 +11,7 @@ import { Search, Plus, Loader2, MapPin } from "lucide-react";
 import { authApi } from "@/lib/services";
 import { useAuthStore } from "@/store/auth";
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { getMineName } from "@/lib/mines";
 import type { Mine } from "@/types";
 
 const MINE_TYPES = ["underground", "opencast", "quarry", "placer", "solution"];
@@ -166,7 +167,7 @@ export default function MinesPage() {
                   <tr><td colSpan={5} className="px-4 py-8 text-center text-[var(--muted-foreground)]">No mines found.</td></tr>
                 ) : filtered.map((mine) => (
                   <tr key={mine.id} onClick={() => router.push(`/mines/${mine.id}`)} className="border-b border-[var(--border)] hover:bg-[var(--stone)]/40 cursor-pointer transition-colors">
-                    <td className="px-4 py-3 font-medium">{mine.name}</td>
+                    <td className="px-4 py-3 font-medium">{mine.name && !mine.name.toLowerCase().includes("unknown") ? mine.name : getMineName(mine.id)}</td>
                     <td className="px-4 py-3 text-[var(--muted-foreground)]">
                       <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5 shrink-0" />{mine.location}</span>
                     </td>

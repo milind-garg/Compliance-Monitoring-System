@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Search, Plus } from "lucide-react";
 import { authApi, inspectionApi } from "@/lib/services";
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { buildMineMap, getMineName } from "@/lib/mines";
 import type { Inspection } from "@/types";
 
 const statusVariant: Record<string, "outline" | "warning" | "success" | "danger"> = {
@@ -38,23 +39,13 @@ const DEMO_INSPECTIONS: Inspection[] = [
   { id: "i10", mine_id: "m4", inspector_id: "u7", inspection_type: "general",       status: "completed",   scheduled_at: "2026-07-29T09:00:00Z", completed_at: "2026-07-29T13:30:00Z", findings: "Overall compliance satisfactory. First-aid stations restocked. Haul road grading completed on schedule.", recommendations: "Schedule next inspection within 45 days.", created_at: "2026-07-25T09:00:00Z" },
 ];
 
-const DEMO_MINE_MAP: Record<string, string> = {
-  m1: "Jharia Coalfield Alpha",
-  m2: "Raniganj Central Block",
-  m3: "Bokaro Deep Mine",
-  m4: "Dhanbad North Pit",
-  m5: "Ramgarh Underground",
-  m6: "Giridih Open-cast",
-};
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default function InspectionsPage() {
   const router = useRouter();
   const [search, setSearch] = useState("");
 
   const [minesQ, inspectionsQ] = useQueries({
     queries: [
-      { queryKey: ["mines"], queryFn: () => authApi.get("/v1/mines/").then((r) => r.data as { id: string; name: string }[]) },
+      { queryKey: ["mines"], queryFn: () => authApi.get("/v1/mines/").then((r) => (r.data.items ?? r.data) as { id: string; name: string }[]) },
       { queryKey: ["inspections"], queryFn: () => inspectionApi.get("/v1/inspections/").then((r) => (r.data.items ?? r.data) as Inspection[]) },
     ],
   });
@@ -63,15 +54,14 @@ export default function InspectionsPage() {
   const inspections = inspectionsQ.data ?? [];
   const isLoading = minesQ.isLoading || inspectionsQ.isLoading;
 
-  const apiMineMap = Object.fromEntries(mines.map((m) => [m.id, m.name]));
+  const mineMap = buildMineMap(mines);
 
   // Fall back to demo data when the API returns nothing
   const displayInspections = inspections.length > 0 ? inspections : DEMO_INSPECTIONS;
-  const mineMap = Object.keys(apiMineMap).length > 0 ? apiMineMap : DEMO_MINE_MAP;
   const isDemo = inspections.length === 0 && !isLoading;
 
   const filtered = displayInspections.filter((ins) => {
-    const mineName = mineMap[ins.mine_id] ?? ins.mine_id;
+    const mineName = getMineName(ins.mine_id, mineMap);
     return (
       mineName.toLowerCase().includes(search.toLowerCase()) ||
       ins.inspection_type.toLowerCase().includes(search.toLowerCase()) ||
@@ -127,7 +117,7 @@ export default function InspectionsPage() {
                   <tr><td colSpan={6} className="px-4 py-8 text-center text-[var(--muted-foreground)]">No inspections found.</td></tr>
                 ) : filtered.map((ins) => (
                   <tr key={ins.id} onClick={() => router.push(`/inspections/${ins.id}`)} className="border-b border-[var(--border)] hover:bg-[var(--stone)]/40 cursor-pointer transition-colors">
-                    <td className="px-4 py-3 font-medium">{mineMap[ins.mine_id] ?? "Unknown Mine"}</td>
+                    <td className="px-4 py-3 font-medium">{getMineName(ins.mine_id, mineMap)}</td>
                     <td className="px-4 py-3 capitalize">{ins.inspection_type.replace("_", " ")}</td>
                     <td className="px-4 py-3">
                       <Badge variant={statusVariant[ins.status] ?? "outline"}>

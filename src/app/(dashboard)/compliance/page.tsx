@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { authApi, complianceApi, inspectionApi, violationApi } from "@/lib/services";
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { buildMineMap, getMineName } from "@/lib/mines";
 
 const statusVariant: Record<string, "success" | "danger" | "warning" | "outline"> = {
   compliant: "success", non_compliant: "danger", pending: "outline",
@@ -145,8 +146,7 @@ export default function CompliancePage() {
   const isLoading = minesQ.isLoading || recordsQ.isLoading;
 
   const records = rawRecords.length > 0 ? rawRecords : DEMO_COMPLIANCE_RECORDS;
-  const apiMineNames = Object.fromEntries((rawMines as any[]).map(m => [m.id, m.name]));
-  const mineNames = Object.keys(apiMineNames).length > 0 ? apiMineNames : DEMO_MINE_MAP;
+  const mineNames = buildMineMap(rawMines as any[]);
 
   const latestPerMine: Record<string, any> = useMemo(() => {
     const acc: Record<string, any> = {};
@@ -177,7 +177,7 @@ export default function CompliancePage() {
   const rows = useMemo(() => Object.values(latestPerMine) as any[], [latestPerMine]);
 
   const filtered = useMemo(() => rows.filter(r => {
-    const name = mineNames[r.mine_id] ?? r.mine_id;
+    const name = getMineName(r.mine_id, mineNames);
     return name.toLowerCase().includes(search.toLowerCase()) ||
       r.status.toLowerCase().includes(search.toLowerCase());
   }), [rows, mineNames, search]);

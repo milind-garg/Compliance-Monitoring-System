@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { violationApi, authApi } from "@/lib/services";
 import { Skeleton } from "@/components/ui/skeleton";
+import { buildMineMap, getMineName } from "@/lib/mines";
 
 const statusVariant: Record<string, "danger" | "warning" | "success" | "outline"> = {
   open: "danger", acknowledged: "warning", resolved: "success", closed: "outline",
@@ -224,8 +225,7 @@ export default function ViolationDetailPage() {
   });
 
   const violation = rawViolation ?? (id ? DEMO_VIOLATIONS_MAP[id] : null);
-  const apiMineMap = Object.fromEntries(rawMines.map(m => [m.id, m.name]));
-  const mineMap = Object.keys(apiMineMap).length > 0 ? apiMineMap : DEMO_MINE_MAP;
+  const mineMap = buildMineMap(rawMines);
 
   const addAction = useMutation({
     mutationFn: (description: string) => violationApi.post(`/v1/violations/${id}/actions`, { description }),
@@ -259,7 +259,7 @@ export default function ViolationDetailPage() {
     <div className="p-6 space-y-6">
       <PageHeader
         title="Violation Detail"
-        description={violation ? `${violation.category} — ${mineMap[violation.mine_id] ?? "Unknown mine"}` : "Loading…"}
+        description={violation ? `${violation.category} — ${getMineName(violation.mine_id, mineMap)}` : "Loading…"}
         actions={
           <Button variant="outline" size="sm" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4 mr-1" /> Back
@@ -299,7 +299,7 @@ export default function ViolationDetailPage() {
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                  <div><span className="font-medium">Mine:</span> {mineMap[violation.mine_id] ?? "—"}</div>
+                  <div><span className="font-medium">Mine:</span> {getMineName(violation.mine_id, mineMap)}</div>
                   <div><span className="font-medium">Reported:</span> {fmt(violation.created_at)}</div>
                   <div><span className="font-medium">Due Date:</span> <span className={isOverdue ? "text-orange-700 font-semibold" : ""}>{fmt(violation.due_date)}</span></div>
                   {violation.resolved_at && <div><span className="font-medium">Resolved:</span> {fmt(violation.resolved_at)}</div>}

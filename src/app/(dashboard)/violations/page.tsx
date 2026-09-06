@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import { authApi, violationApi } from "@/lib/services";
 import { TableSkeleton } from "@/components/ui/skeleton";
+import { buildMineMap, getMineName } from "@/lib/mines";
 import type { Violation } from "@/types";
 
 const statusVariant: Record<string, "danger" | "warning" | "success" | "outline"> = {
@@ -43,16 +44,6 @@ const DEMO_VIOLATIONS: Violation[] = [
   { id: "v10", mine_id: "m3", inspection_id: null, category: "safety",      severity: "medium",   status: "open",         description: "First-aid kits at 4 surface workstations found expired / incomplete. Bandages, antiseptic, and tourniquet missing.",            due_date: "2026-09-13", regulation_ref: "CMR 2017, Rule 44(1)",          resolved_at: null, created_at: "2026-09-05T10:00:00Z" },
 ];
 
-const DEMO_MINE_MAP: Record<string, string> = {
-  m1: "Jharia Coalfield Alpha",
-  m2: "Raniganj Central Block",
-  m3: "Bokaro Deep Mine",
-  m4: "Dhanbad North Pit",
-  m5: "Ramgarh Underground",
-  m6: "Giridih Open-cast",
-};
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default function ViolationsPage() {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -68,15 +59,14 @@ export default function ViolationsPage() {
   const violations = violationsQ.data ?? [];
   const isLoading = minesQ.isLoading || violationsQ.isLoading;
 
-  const apiMineMap = Object.fromEntries(mines.map((m) => [m.id, m.name]));
+  const mineMap = buildMineMap(mines);
 
   // Fall back to demo data when the API returns nothing
   const displayViolations = violations.length > 0 ? violations : DEMO_VIOLATIONS;
-  const mineMap = Object.keys(apiMineMap).length > 0 ? apiMineMap : DEMO_MINE_MAP;
   const isDemo = violations.length === 0 && !isLoading;
 
   const filtered = displayViolations.filter((v) => {
-    const mineName = mineMap[v.mine_id] ?? v.mine_id;
+    const mineName = getMineName(v.mine_id, mineMap);
     return (
       v.description.toLowerCase().includes(search.toLowerCase()) ||
       mineName.toLowerCase().includes(search.toLowerCase()) ||
@@ -133,7 +123,7 @@ export default function ViolationsPage() {
                         <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{v.regulation_ref}</p>
                       )}
                     </td>
-                    <td className="px-4 py-3 font-medium">{mineMap[v.mine_id] ?? "Unknown Mine"}</td>
+                    <td className="px-4 py-3 font-medium">{getMineName(v.mine_id, mineMap)}</td>
                     <td className="px-4 py-3 capitalize">{v.category}</td>
                     <td className="px-4 py-3">
                       <Badge variant={severityVariant[v.severity] ?? "outline"}>

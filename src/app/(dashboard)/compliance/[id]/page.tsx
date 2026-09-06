@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { complianceApi, authApi } from "@/lib/services";
 import { Skeleton } from "@/components/ui/skeleton";
+import { buildMineMap, getMineName } from "@/lib/mines";
 
 const statusVariant: Record<string, "success" | "danger" | "warning" | "outline"> = {
   compliant: "success",
@@ -124,8 +125,7 @@ export default function ComplianceDetailPage() {
   });
 
   const record = rawRecord ?? (id ? DEMO_COMPLIANCE_DETAILS[id] : null);
-  const apiMineMap = Object.fromEntries(rawMines.map((m) => [m.id, m.name]));
-  const mineMap = Object.keys(apiMineMap).length > 0 ? apiMineMap : DEMO_MINE_MAP;
+  const mineMap = buildMineMap(rawMines);
 
   return (
     <div>
@@ -213,7 +213,7 @@ export default function ComplianceDetailPage() {
             <Card>
               <CardContent className="p-6 space-y-4">
                 <h3 className="text-sm font-semibold">Details</h3>
-                <InfoRow icon={Building2} label="Mine" value={mineMap[record.mine_id] ?? record.mine_id} />
+                <InfoRow icon={Building2} label="Mine" value={getMineName(record.mine_id, mineMap)} />
                 <InfoRow icon={Calendar} label="Period Start" value={fmt(record.period_start)} />
                 <InfoRow icon={Calendar} label="Period End" value={fmt(record.period_end)} />
                 {record.reviewed_by && <InfoRow icon={User} label="Reviewed By" value={record.reviewed_by} />}
